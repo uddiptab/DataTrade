@@ -4,11 +4,11 @@ from fyers_api import fyersModel
 from fyers_api import accessToken
 import datetime
 import time
-
+import entry as et 
 #######################################
 # Initialization
 ######################################
-client_id="8P1AKSLX1V-100"
+client_id="H8O8SRR6U6-100"
 # reading access token
 f=open('../Input/token.txt','r')
 for line in f:
@@ -34,7 +34,8 @@ def log_write(text):
 	today = datetime.date.today()
 	date=today.strftime("%Y-%m-%d")
 	file=open('../Log/'+date+'_datacollect.txt','a')
-	file.write(datetime.datetime.now()+": "+text+"\n")
+	text1=("{}: ".format(datetime.datetime.now()))
+	file.write(text1+text+"\n")
 	file.close()
 
 
@@ -47,14 +48,34 @@ def log_write(text):
 	# 2. Keep getting live data feed and historical data for MA strategies
 ##########################################################
 
-#Scrips for which data to be collected (other than NIFTY/BNF/CURRENCy,COMMODITY)
-# Change Currency/commodity derivatives once in a month
-scrip_list=['SBIN','INFY']
+#Scrips which will be evaluated for first red candle short
+first_red_scrip_list=[] # This list holds all the stocks for which First red candle strategy will be evaluated (Input from Keyboard)
+print(" Enter 5 stocks for which First red candle strategy will be evaluated...")
+print(" Enter stock symbols separated by space. Eg TCS INFY SBIN. Press NA if you don't want to add any...")
+first_red_scrip_list= list(map(str,input("\n Enter the stocks: ").split()))
+if len(first_red_scrip_list)>1:
+	df= pd.DataFrame({'STOCKS':first_red_scrip_list})
+	df.to_csv('../Input/red_candle_short_stocks.csv')
+	print(" Red candle short stock lists updated...")
+	log_write(" Red candle short stock lists updated...")
 
+# Scrip list is the list that holds all stocks to be checked
+scrip_list=[]
+
+# Add red candle stocks to the scrip list
+for stock in first_red_scrip_list:
+	scrip_list.append(stock)
+
+quote_stock_list=["NSE:NIFTY50-INDEX","NSE:NIFTYBANK-INDEX"]
+for stock in scrip_list:
+	quote_stock_list.append("NSE:"+stock+"-EQ")
 
 
 # Declare the dict to hold the previous ltp
 prev_ltp={}
+#initialize prev ltp
+for scrip in quote_stock_list:
+	prev_ltp[scrip]=None
 
 
 #Timer inti to keep track of 5 min passed/15 min passed/1 hour passed
@@ -65,10 +86,9 @@ time_1hour=time.time()
 
 
 
-
-
-for i in range (0,10):
-	print(" Debug: in the loop")
+#Loop
+for i in range (0,50):
+	#print(" Debug: in the loop")
 	# Flag to check if BN 12:45 30 min candle details is recorded (see strategy details at:)
 	BN_30_MIN_FLAG=False
 	# JPYINR second one hour data collecttion flag
@@ -83,14 +103,14 @@ for i in range (0,10):
 	#Getting current date and previous date (for historical data collection purpose)
 	curdate=datetime.datetime.today()
 	curdate=curdate.strftime("%Y-%m-%d")
-	prevdate=datetime.datetime.today()-datetime.timedelta(days=1)
+	prevdate=datetime.datetime.today()-datetime.timedelta(days=4)
 	prevdate=prevdate.strftime("%Y-%m-%d")
-	print(curdate,prevdate)
+	
 
 
 	if not JPY_2ND_CANDLE_FLAG:
 		if (hour==14 and minute>=30) or (hour>=15):
-			data = {"symbol":"NSE:JPYINR22SEPFUT","resolution":"60","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
+			data = {"symbol":"NSE:JPYINR22SEPFUT","resolution":"60","date_format":"1","range_from":curdate,"range_to":curdate,"cont_flag":"1"}
 			dt=fyers.history(data)
 			df=convert_data_to_df(dt)
 			#print(df)
@@ -99,7 +119,7 @@ for i in range (0,10):
 			JPY_2ND_CANDLE_FLAG=True
 	if not GBP_3rd_CANDLE_FLAG:
 		if (hour==15 and minute>=30) or (hour>=16):
-			data = {"symbol":"NSE:GBPINR22SEPFUT","resolution":"60","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
+			data = {"symbol":"NSE:GBPINR22SEPFUT","resolution":"60","date_format":"1","range_from":curdate,"range_to":curdate,"cont_flag":"1"}
 			dt=fyers.history(data)
 			df=convert_data_to_df(dt)
 			#print(df)
@@ -108,12 +128,12 @@ for i in range (0,10):
 			GBP_3rd_CANDLE_FLAG=True
 	if not BN_30_MIN_FLAG:
 		if (hour==16 and minute>=15) or (hour>=17):
-			data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"60","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
+			data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"60","date_format":"1","range_from":curdate,"range_to":curdate,"cont_flag":"1"}
 			dt=fyers.history(data)
 			df=convert_data_to_df(dt)
 			#print(df)
 			df.to_csv('../Data/Intraday/30min/JBNF.csv',index=False)
-			log_write(" DATACOLLECTION: BNF 12:45 candle data collected (12:15-12:45")
+			log_write(" DATACOLLECTION: BNF 12:45 candle data collected (12:15-12:45)")
 			BN_30_MIN_FLAG=True
 
 
@@ -134,18 +154,40 @@ for i in range (0,10):
 	#		8. Update the previous ltp dict
 	#	9. END live market quote
 	#################################
+	FIRST_RED_CANDLE_SEEN_FLAG=False
 
 	if time.time()-time_5min>300:
 		#Collect BNF dta firsts
-		data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"5","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
-		dt=fyers.history(data)
-		df=convert_data_to_df(dt)
-		df.to_csv('../Data/Intraday/5min/BNF.csv',index=False)
-		log_write(" DATACOLLECTION: BNF 5 min data collected...")
+		if not FIRST_RED_CANDLE_SEEN_FLAG:
+			data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"5","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
+			dt=fyers.history(data)
+			df=convert_data_to_df(dt)
+			last_open=df.iloc[-1,1]
+			last_close=df.iloc[-1,3]
+			#Stop the data collection once red candle seen
+			if last_open-last_close>0:
+				print(" First red candle seen...")
+				df.to_csv('../Data/Intraday/5min/BNF.csv',index=False)
+				log_write(" DATACOLLECTION: BNF 5 min data collected...")
+				FIRST_RED_CANDLE_SEEN_FLAG=True
+			# Getting the bankbees data
+			data = {"symbol":"NSE:BANKBEES-EQ","resolution":"5","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
+			dt=fyers.history(data)
+			df=convert_data_to_df(dt)
+			df.to_csv('../Data/Intraday/5min/BANKBEES-EQ.csv',index=False)
+			log_write(" DATACOLLECTION: Bankbees 5 min data collected...")
+
+
+		else:
+			print("Green candle seen...")
+
+
+
+
 		#Collect stocks data
 		for stocks in scrip_list:
 			symbol="NSE:"+stocks+"-EQ"
-			data = {"symbol":symbol,"resolution":"5","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
+			data = {"symbol":symbol,"resolution":"5","date_format":"1","range_from":curdate,"range_to":curdate,"cont_flag":"1"}
 			dt=fyers.history(data)
 			df=convert_data_to_df(dt)
 			df.to_csv('../Data/Intraday/5min/'+stocks+'.csv',index=False)
@@ -155,15 +197,34 @@ for i in range (0,10):
 		time_5min=time.time()
 			
 
+
+
+
+
 	if time.time()-time_15min>900:
 		#Collect BNF dta firsts
-		data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"15","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
+		data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"15","date_format":"1","range_from":prevdate,"range_to":curdate,"cont_flag":"1"}
 		dt=fyers.history(data)
 		df=convert_data_to_df(dt)
 		df.to_csv('../Data/Intraday/15min/BNF.csv',index=False)
 		log_write(" DATACOLLECTION: BNF 15 min candle data collected...")
+
 		#resetting the timer
 		time_15min=time.time()
+
+		#Data collection especially for only NIFTY 12:45 strategy
+		if datetime.datetime.now().hour==16 and datetime.datetime.now().minute>=15 and datetime.datetime.now().minute<25:
+			data = {"symbol":"NSE:NIFTY50-INDEX","resolution":"15","date_format":"1","range_from":prevdate,"range_to":curdate,"cont_flag":"1"}
+			dt=fyers.history(data)
+			df=convert_data_to_df(dt)
+			df.to_csv('../Data/Intraday/15min/NIFTY1245.csv',index=False)
+			log_write(" DATACOLLECTION: NIFTY 12:45 candle data collected...")
+
+			data = {"symbol":"NSE:NIFTYBEES-EQ","resolution":"5","date_format":"1","range_from":prevdate,"range_to":curdate,"cont_flag":"1"}
+			dt=fyers.history(data)
+			df=convert_data_to_df(dt)
+			df.to_csv('../Data/Intraday/5min/NIFTYBEES1245-EQ.csv',index=False)
+			log_write(" DATACOLLECTION: NIFTYBEES   12:45 candle data collected...")
 
 
 	##############################################
@@ -171,20 +232,30 @@ for i in range (0,10):
 	# This part continiously fetches ltp for isntruments
 	# Then check for entry conditions
 	#############################################
+
+	
+	for stock in quote_stock_list:
+		data = {"symbols":stock}
+		quotes=fyers.quotes(data)
+		
+		ltp=quotes['d'][0]['v']['lp']
+		print("Stock:{} LTP:{}".format(stock,ltp))
+		pltp=prev_ltp[stock]
+
+
+		# Check for any entry/exit signal
+		try:
+			et.check_entry(stock,ltp,pltp,fyers)
+		except Exception as e:
+			print(e)
+			log_write(" Error in data collection...")
+
+		#Update the dictionary
+		prev_ltp[stock]=ltp
 	
 
 
-
-
-
-
-
-
-
-
-
-
-	time.sleep(100)
+	time.sleep(10)
 
 		
 
