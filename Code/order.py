@@ -48,6 +48,7 @@ def log_write(text):
 	# 2. Keep getting live data feed and historical data for MA strategies
 ##########################################################
 
+T30_min_data_collected=False
 #Scrips which will be evaluated for first red candle short
 first_red_scrip_list=[] # This list holds all the stocks for which First red candle strategy will be evaluated (Input from Keyboard)
 print(" Enter 5 stocks for which First red candle strategy will be evaluated...")
@@ -71,11 +72,34 @@ for stock in scrip_list:
 	quote_stock_list.append("NSE:"+stock+"-EQ")
 
 
+
+
+
 # Declare the dict to hold the previous ltp
 prev_ltp={}
 #initialize prev ltp
 for scrip in quote_stock_list:
 	prev_ltp[scrip]=None
+
+
+
+
+######################
+# For 30 min entries
+######################
+stock_list1 = ['BAJFINANCE','SBIN'] #30 min breakout max 2 entry tp1 = 2*diff tp2  = 3*diff
+stock_list2 = ['TCS','SUNPHARMA','RELIANCE','MARUTI'] # Max 2 tnry // Hold for the entire day
+quote_list=[]
+for stock in stock_list1:
+	quote_list.append('NSE:'+stock+"-EQ")
+for stock in stock_list2:
+	quote_list.append('NSE:'+stock+"-EQ")
+
+for symbol in quote_list:
+	prev_ltp[symbol]=None
+
+
+
 
 
 #Timer inti to keep track of 5 min passed/15 min passed/1 hour passed
@@ -87,7 +111,8 @@ time_1hour=time.time()
 
 
 #Loop
-for i in range (0,50):
+#for i in range (0,50):
+while True:
 	#print(" Debug: in the loop")
 	# Flag to check if BN 12:45 30 min candle details is recorded (see strategy details at:)
 	BN_30_MIN_FLAG=False
@@ -107,11 +132,13 @@ for i in range (0,50):
 	prevdate=prevdate.strftime("%Y-%m-%d")
 	
 
-
+	'''
 	if not JPY_2ND_CANDLE_FLAG:
 		if (hour==14 and minute>=30) or (hour>=15):
 			data = {"symbol":"NSE:JPYINR22SEPFUT","resolution":"60","date_format":"1","range_from":curdate,"range_to":curdate,"cont_flag":"1"}
 			dt=fyers.history(data)
+			print("------------")
+			print(dt)
 			df=convert_data_to_df(dt)
 			#print(df)
 			df.to_csv('../Data/Intraday/1hour/JPYINR.csv',index=False)
@@ -135,6 +162,7 @@ for i in range (0,50):
 			df.to_csv('../Data/Intraday/30min/JBNF.csv',index=False)
 			log_write(" DATACOLLECTION: BNF 12:45 candle data collected (12:15-12:45)")
 			BN_30_MIN_FLAG=True
+	'''
 
 
 	################################################
@@ -157,40 +185,48 @@ for i in range (0,50):
 	FIRST_RED_CANDLE_SEEN_FLAG=False
 
 	if time.time()-time_5min>300:
-		#Collect BNF dta firsts
+		#Collect BNF dta firsts 5 min red candle
 		if not FIRST_RED_CANDLE_SEEN_FLAG:
-			data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"5","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
-			dt=fyers.history(data)
-			df=convert_data_to_df(dt)
-			last_open=df.iloc[-1,1]
-			last_close=df.iloc[-1,3]
-			#Stop the data collection once red candle seen
-			if last_open-last_close>0:
-				print(" First red candle seen...")
-				df.to_csv('../Data/Intraday/5min/BNF.csv',index=False)
-				log_write(" DATACOLLECTION: BNF 5 min data collected...")
-				FIRST_RED_CANDLE_SEEN_FLAG=True
+			pass
+			'''
+			try:
+				data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"5","date_format":"1","range_from":curdate,"range_to":curdate,"cont_flag":"1"}
+				dt=fyers.history(data)
+				df=convert_data_to_df(dt)
+				last_open=df.iloc[-1,1]
+				last_close=df.iloc[-1,3]
+				#Stop the data collection once red candle seen
+				if last_open-last_close>0:
+					print(" First red candle seen...")
+					df.to_csv('../Data/Intraday/5min/BNF.csv',index=False)
+					log_write(" DATACOLLECTION: BNF 5 min data collected...")
+					FIRST_RED_CANDLE_SEEN_FLAG=True
+			except Excpetion as e:
+				print(e)
 			# Getting the bankbees data
+			
 			data = {"symbol":"NSE:BANKBEES-EQ","resolution":"5","date_format":"1","range_from":"2022-09-21","range_to":"2022-09-22","cont_flag":"1"}
 			dt=fyers.history(data)
 			df=convert_data_to_df(dt)
 			df.to_csv('../Data/Intraday/5min/BANKBEES-EQ.csv',index=False)
 			log_write(" DATACOLLECTION: Bankbees 5 min data collected...")
+			'''
 
 
 		else:
-			print("Green candle seen...")
+			print("Green candle seen...NIFTYBANK")
 
 
 
 
-		#Collect stocks data
+		#Collect stocks data (5 min candles)
 		for stocks in scrip_list:
 			symbol="NSE:"+stocks+"-EQ"
 			data = {"symbol":symbol,"resolution":"5","date_format":"1","range_from":curdate,"range_to":curdate,"cont_flag":"1"}
 			dt=fyers.history(data)
 			df=convert_data_to_df(dt)
 			df.to_csv('../Data/Intraday/5min/'+stocks+'.csv',index=False)
+			print(" Data collected for {} {}".format(stocks,symbol))
 			log_write(" DATACOLLECTION: {} 5 min data collected...".format(stocks))
 
 		#reseting the timer
@@ -202,6 +238,7 @@ for i in range (0,50):
 
 
 	if time.time()-time_15min>900:
+		
 		#Collect BNF dta firsts
 		data = {"symbol":"NSE:NIFTYBANK-INDEX","resolution":"15","date_format":"1","range_from":prevdate,"range_to":curdate,"cont_flag":"1"}
 		dt=fyers.history(data)
@@ -214,17 +251,18 @@ for i in range (0,50):
 
 		#Data collection especially for only NIFTY 12:45 strategy
 		if datetime.datetime.now().hour==16 and datetime.datetime.now().minute>=15 and datetime.datetime.now().minute<25:
-			data = {"symbol":"NSE:NIFTY50-INDEX","resolution":"15","date_format":"1","range_from":prevdate,"range_to":curdate,"cont_flag":"1"}
+			data = {"symbol":"NSE:NIFTY50-INDEX","resolution":"30","date_format":"1","range_from":prevdate,"range_to":curdate,"cont_flag":"1"}
 			dt=fyers.history(data)
 			df=convert_data_to_df(dt)
-			df.to_csv('../Data/Intraday/15min/NIFTY1245.csv',index=False)
+			df.to_csv('../Data/Intraday/30min/NIFTY1245.csv',index=False)
 			log_write(" DATACOLLECTION: NIFTY 12:45 candle data collected...")
 
-			data = {"symbol":"NSE:NIFTYBEES-EQ","resolution":"5","date_format":"1","range_from":prevdate,"range_to":curdate,"cont_flag":"1"}
+			data = {"symbol":"NSE:NIFTYBEES-EQ","resolution":"30","date_format":"1","range_from":prevdate,"range_to":curdate,"cont_flag":"1"}
 			dt=fyers.history(data)
 			df=convert_data_to_df(dt)
-			df.to_csv('../Data/Intraday/5min/NIFTYBEES1245-EQ.csv',index=False)
+			df.to_csv('../Data/Intraday/30min/NIFTYBEES1245-EQ.csv',index=False)
 			log_write(" DATACOLLECTION: NIFTYBEES   12:45 candle data collected...")
+
 
 
 	##############################################
@@ -237,7 +275,7 @@ for i in range (0,50):
 	for stock in quote_stock_list:
 		data = {"symbols":stock}
 		quotes=fyers.quotes(data)
-		
+	
 		ltp=quotes['d'][0]['v']['lp']
 		print("Stock:{} LTP:{}".format(stock,ltp))
 		pltp=prev_ltp[stock]
@@ -254,6 +292,62 @@ for i in range (0,50):
 		prev_ltp[stock]=ltp
 	
 
+
+	####################################
+	# data Collection 30 min
+	###################################
+	
+
+
+
+	#Collect the data after one hour
+	if (datetime.datetime.now().hour == 13 and datetime.datetime.now().minute==45) or (datetime.datetime.now().hour == 14 and datetime.datetime.now().minute==45):
+
+		for stock in quote_list:
+			
+			data = {"symbol":stock,"resolution":"30","date_format":"1","range_from":curdate,"range_to":curdate,"cont_flag":"1"}
+			dt=fyers.history(data)
+			df=convert_data_to_df(dt)
+			fname=stock[4:-3]
+			df.to_csv('../Data/Intraday/30min/'+fname+'.csv',index=False)
+		
+
+		time.sleep(2)
+		
+	####################################
+	# For 30 min breakout stock
+	####################################
+	if (datetime.datetime.now().hour==13 and datetime.datetime.now().minute>=45) or (datetime.datetime.now().hour>=14):
+		print(" \n\n### BO STOCVK #######")
+		stock_list1 = ['BAJFINANCE','SBIN'] #30 min breakout max 2 entry tp1 = 2*diff tp2  = 3*diff
+		stock_list2 = ['TCS','SUNPHARMA','RELIANCE','MARUTI'] # Max 2 tnry // Hold for the entire day
+		quote_list=[]
+		for stock in stock_list1:
+			symbol="NSE:"+stock+"-EQ"
+			data = {"symbols":symbol}
+			quotes=fyers.quotes(data)
+			ltp=quotes['d'][0]['v']['lp']
+			pltp=prev_ltp[symbol]
+			print("Stock:{} LTP:{} prev_ltp:{}".format(symbol,ltp,pltp))
+			try:
+				et.check_30min_type1(symbol,ltp,pltp,fyers)
+			except Exception as e:
+				print(e)
+			prev_ltp[symbol]=ltp
+
+		for stock in stock_list2:
+			symbol="NSE:"+stock+"-EQ"
+			data = {"symbols":symbol}
+			quotes=fyers.quotes(data)
+			ltp=quotes['d'][0]['v']['lp']
+			print("Stock:{} LTP:{}".format(symbol,ltp))
+			pltp=prev_ltp[symbol]
+			print("Stock:{} LTP:{} prev_ltp:{}".format(symbol,ltp,pltp))
+			try:
+				et.check_30min_type2(symbol,ltp,pltp,fyers)
+			except Exception as e:
+				print(e)
+			prev_ltp[symbol]=ltp
 
 	time.sleep(10)
 
